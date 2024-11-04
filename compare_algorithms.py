@@ -5,13 +5,11 @@ import pybullet as p
 import sim_update
 import numpy as np
 import matplotlib.pyplot as plt
-from main_rrt import rrt, run as run_rrt
-from rrt_apf import rrt as rrt_apf, run as run_rrt_apf
-from bi_rrt import bidirectional_rrt, run_bidirectional_rrt
-from bi_rrt_apf import bidirectional_rrt as bi_rrt_apf, run_bidirectional_rrt as run_bi_rrt_apf
+from main_rrt import rrt
+from rrt_apf import rrt as rrt_apf
+from bi_rrt import bidirectional_rrt
+from bi_rrt_apf import bidirectional_rrt as bi_rrt_apf
 import time
-from main_rrt import get_grasp_position_angle as get_gr
-
 
 class AlgorithmComparison:
     def __init__(self, num_trials=50):
@@ -26,14 +24,19 @@ class AlgorithmComparison:
         }
 
     def run_comparison(self):
+        MAX_ITERS = 10000
+        delta_q = 0.1
+        steer_goal_p = 0.5
+        max_connection_distance = 0.3
+
         algorithms = {
-            'RRT': (run_rrt, rrt),
-            'RRT-APF': (run_rrt_apf, rrt_apf),
-            'Bi-RRT': (run_bidirectional_rrt, bidirectional_rrt),
-            'Bi-RRT-APF': (run_bi_rrt_apf, bi_rrt_apf)
+            'RRT': rrt,
+            'RRT-APF': rrt_apf,
+            'Bi-RRT': bidirectional_rrt,
+            'Bi-RRT-APF': bi_rrt_apf
         }
 
-        for algo_name, (run_func, algo_func) in algorithms.items():
+        for algo_name, algo_func in algorithms.items():
             print(f"\nTesting {algo_name}...")
             for trial in range(self.num_trials):
                 print(f"Trial {trial + 1}/{self.num_trials}")
@@ -42,24 +45,31 @@ class AlgorithmComparison:
                 self.env.reset_objects()
                 self.env.load_gripper()
                 
-                # Execute grasp
-                object_id = self.env._objects_body_ids[0]
-                position, grasp_angle = get_gr(object_id)
-                grasp_success = self.env.execute_grasp(position, grasp_angle)
-                
-                if grasp_success:
+                try:
                     # Measure execution time
                     start_time = time.time()
                     
-                    # Run algorithm
-                    path_conf = algo_func(
-                        self.env,
-                        self.env.robot_home_joint_config,
-                        self.env.robot_goal_joint_config,
-                        10000,  # MAX_ITERS
-                        0.1,    # delta_q
-                        0.5     # steer_goal_p
-                    )
+                    if algo_name in ['Bi-RRT', 'Bi-RRT-APF']:
+                        # Bidirectional RRT variants
+                        path_conf = algo_func(
+                            self.env,
+                            self.env.robot_home_joint_config,
+                            self.env.robot_goal_joint_config,
+                            MAX_ITERS,
+                            delta_q,
+                            steer_goal_p,
+                            max_connection_distance
+                        )
+                    else:
+                        # Regular RRT variants
+                        path_conf = algo_func(
+                            self.env.robot_home_joint_config,
+                            self.env.robot_goal_joint_config,
+                            MAX_ITERS,
+                            delta_q,
+                            steer_goal_p,
+                            self.env
+                        )
                     
                     end_time = time.time()
                     execution_time = end_time - start_time
@@ -70,12 +80,18 @@ class AlgorithmComparison:
                         self.results[algo_name]['path_lengths'].append(path_length)
                         self.results[algo_name]['execution_times'].append(execution_time)
                         self.results[algo_name]['success_rate'] += 1
+                
+                except Exception as e:
+                    print(f"Error in {algo_name}, trial {trial}: {str(e)}")
+                    continue
 
         # Convert success rates to percentages
         for algo in self.results:
             self.results[algo]['success_rate'] = (self.results[algo]['success_rate'] / self.num_trials) * 100
 
     def calculate_path_length(self, path):
+        if not path:
+            return 0
         length = 0
         for i in range(1, len(path)):
             length += np.linalg.norm(np.array(path[i]) - np.array(path[i-1]))
@@ -131,10 +147,10 @@ class AlgorithmComparison:
 
 def main():
     random.seed(42)  # For reproducibility
-    comparison = AlgorithmComparison(num_trials=50)
+    comparison = AlgorithmComparison(num_trials=10)  # Reduced number of trials for testing
     comparison.run_comparison()
     comparison.print_statistics()
     comparison.plot_results()
 
 if __name__ == "__main__":
-    main()
+    main() 

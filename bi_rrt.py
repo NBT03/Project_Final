@@ -28,50 +28,101 @@ def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, ma
     # Khởi tạo hai cây
     tree_start = [Node(q_start)]
     tree_goal = [Node(q_goal)]
-
+    
     for i in range(MAX_ITERS):
         # Luân phiên mở rộng giữa cây start và cây goal
         if i % 2 == 0:
             current_tree = tree_start
             other_tree = tree_goal
             tree_identifier = 'start'
-            steer_target = q_goal  # Định hướng mẫu hóa về mục tiêu khi mở rộng cây start
         else:
             current_tree = tree_goal
             other_tree = tree_start
             tree_identifier = 'goal'
-            steer_target = q_start  # Định hướng mẫu hóa về khởi đầu khi mở rộng cây goal
 
-        # Mẫu hóa một cấu hình ngẫu nhiên với định hướng tương ứng
-        q_rand = semi_random_sample(steer_goal_p, steer_target)
+        # Tăng xác suất kết nối với cây còn lại
+        if random.random() < 0.3:  # 30% cơ hội nhắm thẳng vào cây còn lại
+            nearest_other = nearest([node.joint_positions for node in other_tree], 
+                                  current_tree[-1].joint_positions)
+            q_rand = nearest_other
+        else:
+            q_rand = semi_random_sample(steer_goal_p, q_goal if tree_identifier == 'start' else q_start)
 
-        # Tìm cấu hình gần nhất trong cây hiện tại
+        # Tìm và mở rộng nút gần nhất
         q_nearest = nearest([node.joint_positions for node in current_tree], q_rand)
         q_new = steer(q_nearest, q_rand, delta_q)
 
-        # Kiểm tra đường đi không va chạm
         if not env.check_collision(q_new, distance=0.12):
-            # Thêm nút mới vào cây hiện tại
             new_node = Node(q_new)
             nearest_node = next(node for node in current_tree if node.joint_positions == q_nearest)
             new_node.parent = nearest_node
             current_tree.append(new_node)
             visualize_path(q_nearest, q_new, env, tree=tree_identifier)
 
-            # Thử kết nối hai cây với công thức mới
-            combined_path = connect_trees(tree_start, tree_goal, env, max_connection_distance)
-            if combined_path:
-                print(f"Đã tìm thấy đường đi tại vòng lặp {i}")
-                return combined_path
+            # Thử kết nối với cây còn lại
+            closest_other = nearest([node.joint_positions for node in other_tree], q_new)
+            if get_euclidean_distance(q_new, closest_other) < max_connection_distance:
+                if try_connect_nodes(q_new, closest_other, env, delta_q):
+                    # Tìm thấy đường đi
+                    if tree_identifier == 'start':
+                        path = extract_path(current_tree, other_tree, new_node, 
+                                         next(node for node in other_tree 
+                                             if node.joint_positions == closest_other))
+                    else:
+                        path = extract_path(other_tree, current_tree, 
+                                         next(node for node in other_tree 
+                                             if node.joint_positions == closest_other),
+                                         new_node)
+                    return path
 
-        else:
-            print(f"Phát hiện va chạm với q_new tại vòng lặp {i}")
-
-        if i % 500 == 0:
-            print(f"Vòng lặp {i}: Đã mở rộng các cây.")
-
-    print("Thuật toán Bidirectional RRT không tìm thấy đường đi trong giới hạn vòng lặp.")
     return None
+
+def try_connect_nodes(q1, q2, env, step_size):
+    """Thử kết nối hai nút với bước nhỏ hơn"""
+    distance = get_euclidean_distance(q1, q2)
+    steps = max(int(distance / (step_size/2)), 5)  # Ít nhất 5 bước kiểm tra
+    
+    for i in range(1, steps):
+        t = i / steps
+        q_interp = [q1[j] + (q2[j] - q1[j]) * t for j in range(len(q1))]
+        if env.check_collision(q_interp, distance=0.125):
+            return False
+        # Vẽ đường kết nối để debug
+        visualize_path(q1, q_interp, env, color=[0, 0, 1])  # Màu xanh dương cho đường kết nối
+    return True
+
+def extract_path(tree_start, tree_goal, node_start, node_goal):
+    """Trích xuất đường đi từ hai cây"""
+    path_start = []
+    current = node_start
+    while current is not None:
+        path_start.append(current.joint_positions)
+        current = current.parent
+    path_start.reverse()
+
+    path_goal = []
+    current = node_goal
+    while current is not None:
+        path_goal.append(current.joint_positions)
+        current = current.parent
+
+    # Làm mịn đường đi
+    complete_path = path_start + path_goal
+    return smooth_path(complete_path, env)
+
+def smooth_path(path, env, max_tries=50):
+    """Làm mịn đường đi bằng cách loại bỏ các điểm thừa"""
+    if len(path) <= 2:
+        return path
+    
+    i = 0
+    while i < len(path) - 2 and max_tries > 0:
+        if try_connect_nodes(path[i], path[i + 2], env, delta_q/2):
+            path.pop(i + 1)
+            max_tries -= 1
+        else:
+            i += 1
+    return path
 
 def semi_random_sample(steer_goal_p, steer_target):
     prob = random.random()

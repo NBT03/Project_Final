@@ -14,8 +14,8 @@ import transforms
 from scipy.spatial.transform import Rotation
 import transforms3d
 import random
-import main_bi_rrt
-from main_bi_rrt import dynamic_rrt_star
+import bi_rrt
+from bi_rrt import dynamic_rrt_star
 from train_seg_model import RGBDataset
 import threading
 import sim_update
@@ -175,8 +175,8 @@ def run_dynamic_rrt_star():
         if grasp_success:  # Move the object to another tote
             is_grasped[obj_index] = True
             # Get a list of robot configurations in small step sizes
-            path_conf = main_bi_rrt.dynamic_rrt_star(env, env.robot_home_joint_config,
-                                 env.robot_goal_joint_config, main_bi_rrt.MAX_ITERS, main_bi_rrt.delta_q, 0.5)
+            path_conf = bi_rrt.dynamic_rrt_star(env, env.robot_home_joint_config,
+                                 env.robot_goal_joint_config, bi_rrt.MAX_ITERS, bi_rrt.delta_q, 0.5)
             if path_conf is None:
                 print(
                     "no collision-free path is found within the time budget. continuing ...")
@@ -203,8 +203,8 @@ def run_dynamic_rrt_star():
 
                 # Retrace the path to original location
                 # ===============================================================================
-                path_conf1 = main_bi_rrt.dynamic_rrt_star(env, env.robot_goal_joint_config,
-                                                  env.robot_home_joint_config, main_bi_rrt.MAX_ITERS, main_bi_rrt.delta_q, 0.5,
+                path_conf1 = bi_rrt.dynamic_rrt_star(env, env.robot_goal_joint_config,
+                                                  env.robot_home_joint_config, bi_rrt.MAX_ITERS, bi_rrt.delta_q, 0.5,
                                                 )
                 if path_conf1:
                     for joint_state in path_conf1:
