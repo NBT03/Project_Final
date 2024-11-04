@@ -82,11 +82,11 @@ class PyBulletSim:
         self.reset_objects()
         self.obstacles = [
             # p.loadURDF('assets/obstacles/block.urdf',
-            #            basePosition=[0.5, -0.25, 1.25],
+            #            basePosition=[0.5, -0.6, 1.5],
             #            useFixedBase=True
             #            ),
             p.loadURDF('assets/obstacles/block.urdf',
-                       basePosition=[0.4, -0.6, 1.25],
+                       basePosition=[0.45, -0.55, 1.25],
                        useFixedBase=True
                        ),
         ]

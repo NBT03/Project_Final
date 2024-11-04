@@ -24,7 +24,7 @@ def visualize_path(q_1, q_2, env, color=[0, 1, 0], tree='start'):
     debug_color = color if tree == 'start' else [1, 0, 1]  # Màu sắc khác nhau cho hai cây
     p.addUserDebugLine(point_1, point_2, debug_color, 1.0)
 
-def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, max_connection_distance=0.15):
+def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, max_connection_distance=0.3):
     # Khởi tạo hai cây
     tree_start = [Node(q_start)]
     tree_goal = [Node(q_goal)]
@@ -50,7 +50,7 @@ def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, ma
         q_new = steer(q_nearest, q_rand, delta_q)
 
         # Kiểm tra đường đi không va chạm
-        if not env.check_collision(q_new, distance=0.125):
+        if not env.check_collision(q_new, distance=0.12):
             # Thêm nút mới vào cây hiện tại
             new_node = Node(q_new)
             nearest_node = next(node for node in current_tree if node.joint_positions == q_nearest)

@@ -228,6 +228,7 @@ def draw():
         except Exception as e:
             print(f"Exception in draw: {e}")
         
+        # Pause briefly to reduce CPU usage
         time.sleep(0.1)
 if __name__ == "__main__":
     random.seed(5)

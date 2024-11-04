@@ -10,7 +10,7 @@ import time
 import threading
 
 MAX_ITERS = 10000
-delta_q = 0.1
+delta_q = 0.05
 
 def visualize_path(q_1, q_2, env, color=[0, 1, 0]):
     env.set_joint_positions(q_1)
@@ -28,7 +28,7 @@ def rrt(q_init, q_goal, MAX_ITERS, delta_q, steer_goal_p, env, distance=0.12):
     for i in range(MAX_ITERS):
         q_rand = semi_random_sample(steer_goal_p, q_goal)
         q_nearest = nearest(V, q_rand)
-        q_new = steer(q_nearest, q_rand, delta_q)
+        q_new = modified_steer(q_nearest, q_rand, delta_q, q_goal, env)
         if not env.check_collision(q_new, 0.12):
             if q_new not in V:
                 V.append(q_new)
@@ -84,14 +84,184 @@ def nearest(V, q_rand):
     return q_nearest
 
 
-def steer(q_nearest, q_rand, delta_q):
-    q_new = None
-    if get_euclidean_distance(q_rand, q_nearest) <= delta_q:
-        q_new = q_rand
-    else:
-        q_hat = [(q_rand[i] - q_nearest[i]) / get_euclidean_distance(q_rand, q_nearest) for i in range(len(q_rand))]
-        q_new = [q_nearest[i] + q_hat[i] * delta_q for i in range(len(q_hat))]
-    return q_new
+def modified_steer(q_nearest, q_rand, delta_q, q_goal, env):
+    """Hàm steer mới có tích hợp APF"""
+    # Tính các lực
+    att = attractive_force(q_nearest, q_goal)
+    rep = repulsive_force(q_nearest, env)
+    
+    # Tổng hợp lực
+    total_force = att + rep
+    
+    # Chuẩn hóa vector lực
+    if np.linalg.norm(total_force) > 0:
+        total_force = total_force / np.linalg.norm(total_force)
+    
+    # Tính hướng gốc từ RRT
+    direction = np.array(q_rand) - np.array(q_nearest)
+    if np.linalg.norm(direction) > 0:
+        direction = direction / np.linalg.norm(direction)
+    
+    # Kết hợp hướng RRT với APF (70% RRT, 30% APF)
+    combined_direction = 0.7 * direction + 0.3 * total_force
+    
+    # Chuẩn hóa
+    if np.linalg.norm(combined_direction) > 0:
+        combined_direction = combined_direction / np.linalg.norm(combined_direction)
+    
+    # Tạo cấu hình mới
+    q_new = np.array(q_nearest) + delta_q * combined_direction
+    
+    # Trực quan hóa
+    env.set_joint_positions(q_nearest)
+    start_pos = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)[0]
+    env.set_joint_positions(q_new)
+    end_pos = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)[0]
+    
+    # Vẽ hướng di chuyển
+    p.addUserDebugLine(
+        start_pos,
+        end_pos,
+        [0, 1, 0],  # Màu xanh lá cho hướng di chuyển
+        lineWidth=2,
+        lifeTime=0.1
+    )
+    
+    return q_new.tolist()
+
+
+def attractive_force(q_current, q_goal, k_att=1.0):
+    """Tính lực hút trong không gian khớp"""
+    diff = np.array(q_goal) - np.array(q_current)
+    return k_att * diff
+
+
+def repulsive_force(q_current, env, k_rep=1000.0, d0=1):
+    """Tính lực đẩy từ chướng ngại vật tác động lên vật thể được gắp"""
+    # Đặt robot vào cấu hình hiện tại
+    env.set_joint_positions(q_current)
+    
+    # Khởi tạo lực đẩy
+    rep_force = np.zeros(6)
+    
+    # Lấy vị trí end-effector và vật thể được gắp
+    end_effector_pos = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)[0]
+    
+    # Kiểm tra xem robot có đang gắp vật không
+    if hasattr(env, 'grasped_object_id') and env.grasped_object_id is not None:
+        # Lấy vị trí và hướng của vật thể được gắp
+        object_pos, object_orn = p.getBasePositionAndOrientation(env.grasped_object_id)
+        
+        # Tính các điểm kiểm tra trên vật thể (có thể là các góc hoặc điểm quan trọng)
+        check_points = get_object_check_points(object_pos, object_orn)
+        
+        # Với mỗi chướng ngại vật
+        for obstacle_id in env.obstacles:
+            # Kiểm tra từng điểm trên vật thể
+            for point in check_points:
+                closest_points = p.getClosestPoints(env.grasped_object_id, obstacle_id, d0)
+                if closest_points:
+                    d = closest_points[0][8]  # khoảng cách
+                    if d < d0:
+                        obstacle_pos = closest_points[0][6]
+                        diff = np.array(point) - np.array(obstacle_pos)
+                        direction = diff / np.linalg.norm(diff)
+                        
+                        # Tính lực đẩy trong không gian Cartesian
+                        cart_force = k_rep * (1/d - 1/d0) * (1/d**3) * direction
+                        
+                        # Chuyển đổi lực từ vật thể về end-effector
+                        object_to_ee_transform = np.array(end_effector_pos) - np.array(object_pos)
+                        transformed_force = transform_force(cart_force, object_to_ee_transform)
+                        
+                        # Chuyển đổi sang không gian khớp sử dụng Jacobian
+                        J = calculate_jacobian(env, q_current)
+                        joint_force = np.dot(J.T, transformed_force[:3])
+                        rep_force += joint_force
+                        
+                        # Trực quan hóa lực đẩy
+                        p.addUserDebugLine(
+                            point,
+                            obstacle_pos,
+                            [1, 0, 0],  # Màu đỏ cho lực đẩy
+                            lineWidth=2,
+                            lifeTime=0.1
+                        )
+    
+    return rep_force
+
+def get_object_check_points(object_pos, object_orn):
+    """Tính toán các điểm kiểm tra trên vật thể"""
+    # Chuyển đổi quaternion thành ma trận xoay
+    rot_matrix = p.getMatrixFromQuaternion(object_orn)
+    rot_matrix = np.array(rot_matrix).reshape(3, 3)
+    
+    # Giả sử vật thể là hình hộp, tạo các điểm ở các góc
+    # Bạn cần điều chỉnh kích thước này theo vật thể thực tế
+    half_extents = np.array([0.1, 0.02, 0.02])  # Ví dụ cho một thanh dài
+    
+    # Tạo 8 điểm ở các góc của hình hộp
+    points = []
+    for x in [-1, 1]:
+        for y in [-1, 1]:
+            for z in [-1, 1]:
+                point = np.array([
+                    x * half_extents[0],
+                    y * half_extents[1],
+                    z * half_extents[2]
+                ])
+                # Xoay điểm theo hướng của vật thể
+                rotated_point = np.dot(rot_matrix, point)
+                # Dịch chuyển đến vị trí của vật thể
+                world_point = rotated_point + np.array(object_pos)
+                points.append(world_point)
+    
+    return points
+
+def transform_force(force, transform):
+    """Chuyển đổi lực từ điểm tác động về end-effector"""
+    # Tính moment do lực tạo ra
+    moment = np.cross(transform, force[:3])
+    # Kết hợp lực và moment
+    transformed_force = np.concatenate([force[:3], moment])
+    return transformed_force
+
+def visualize_forces(env, object_pos, obstacle_pos, force):
+    """Trực quan hóa các lực tác động"""
+    # Vẽ vector lực
+    scale = 0.1  # Tỷ lệ để vẽ vector lực
+    force_end = object_pos + scale * force[:3]
+    
+    # Vẽ lực đẩy (màu đỏ)
+    p.addUserDebugLine(
+        object_pos,
+        force_end,
+        [1, 0, 0],
+        lineWidth=2,
+        lifeTime=0.1
+    )
+    
+    # Vẽ đường nối giữa vật thể và chướng ngại vật (màu xám)
+    p.addUserDebugLine(
+        object_pos,
+        obstacle_pos,
+        [0.5, 0.5, 0.5],
+        lineWidth=1,
+        lifeTime=0.1
+    )
+
+def calculate_jacobian(env, q):
+    """Tính ma trận Jacobian"""
+    zero_vec = [0.0] * 6
+    jac_t, _ = p.calculateJacobian(
+        env.robot_body_id,
+        env.robot_end_effector_link_index,
+        [0, 0, 0],
+        q,
+        zero_vec,
+        zero_vec
+    )
+    return np.array(jac_t)
 
 
 def get_grasp_position_angle(object_id):
@@ -238,5 +408,5 @@ if __name__ == "__main__":
     thread1 = threading.Thread(target=run)
     thread2 = threading.Thread(target=draw)
     thread1.start()
-    thread2.start()
+    # thread2.start()
     
