@@ -6,34 +6,22 @@ import random
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import time
+import threading
 
 MAX_ITERS = 10000
 delta_q = 0.1
 
 def visualize_path(q_1, q_2, env, color=[0, 1, 0]):
-    # obtain position of first point
     env.set_joint_positions(q_1)
     point_1 = p.getLinkState(env.robot_body_id, 6)[0]
-    # obtain position of second point
     env.set_joint_positions(q_2)
     point_2 = p.getLinkState(env.robot_body_id, 6)[0]
-    # draw line between points
     p.addUserDebugLine(point_1, point_2, color, 1.0)
 
 
 def rrt(q_init, q_goal, MAX_ITERS, delta_q, steer_goal_p, env, distance=0.12):
-    """
-    :param q_init: initial configuration
-    :param q_goal: goal configuration
-    :param MAX_ITERS: max number of iterations
-    :param delta_q: steer distance
-    :param steer_goal_p: probability of steering towards the goal
-    :param distance: threshold distance for check_collision
-    :returns path: series of joint angles
-    """
-    # ========== PART 3 =========
-    # Implement RRT code here. This function should return a list of joint configurations
-    # that the robot should take in order to reach q_goal starting from q_init
+
     V, E = [q_init], []
     path, found = [], False
 
@@ -69,12 +57,6 @@ def rrt(q_init, q_goal, MAX_ITERS, delta_q, steer_goal_p, env, distance=0.12):
 
 
 def semi_random_sample(steer_goal_p, q_goal):
-    """
-    :param steer_goal_p: probability of steering towards the goal
-    :param q_goal: goal configuration
-
-    :returns q_rand: a uniform random sample in free Cspace
-    """
     prob = random.random()
 
     if prob < steer_goal_p:
@@ -93,13 +75,6 @@ def get_euclidean_distance(q1, q2):
 
 
 def nearest(V, q_rand):
-    """
-    :param V: vertices in the current tree
-    :param q_rand: a new uniform random sample
-
-    :returns q_nearest: the closet point on the tree to q_rand
-    """
-    # Using euclidean distance
     distance = float("inf")
     q_nearest = None
     for idx, v in enumerate(V):
@@ -121,49 +96,31 @@ def steer(q_nearest, q_rand, delta_q):
 
 def get_grasp_position_angle(object_id):
     position, grasp_angle = np.zeros((3, 1)), 0
-    # ========= PART 2============
-    # Get position and orientation (yaw in radians) of the gripper for grasping
-    # ==================================
     position, orientation = p.getBasePositionAndOrientation(object_id)
     grasp_angle = p.getEulerFromQuaternion(orientation)[2]
     return position, grasp_angle
-
-
-if __name__ == "__main__":
-    random.seed(1)
-    object_shapes = [
-        "assets/objects/cube.urdf",
-    ]
-    env = sim_update.PyBulletSim(object_shapes = object_shapes)
-    num_trials = 3  # Tăng số lần thử nghiệm lên 50
-    
-    # Danh sách lưu trữ độ dài đường đi của từng lần chạy
+def run():
+    num_trials = 20  
     path_lengths = []
-
-    # PART 3: RRT Implementation
     env.load_gripper()
     passed = 0
     for trial in range(num_trials):
         print(f"Thử nghiệm thứ: {trial + 1}")
-        # grasp the object
         object_id = env._objects_body_ids[0]
         position, grasp_angle = get_grasp_position_angle(object_id)
         grasp_success = env.execute_grasp(position, grasp_angle)
         if grasp_success:
-            # get a list of robot configuration in small step sizes
             path_conf = rrt(env.robot_home_joint_config,
                             env.robot_goal_joint_config, MAX_ITERS, delta_q, 0.5, env)
             if path_conf is None:
                 print("No collision-free path is found within the time budget. Continuing...")
-                path_lengths.append(None)  # Ghi nhận không tìm thấy đường đi
+                path_lengths.append(None)  
             else:
-                # Tính độ dài đường đi
                 path_length = 0
                 for i in range(1, len(path_conf)):
                     path_length += get_euclidean_distance(path_conf[i-1], path_conf[i])
                 path_lengths.append(path_length)
                 
-                # Execute the path while visualizing the location of joint 5
                 env.set_joint_positions(env.robot_home_joint_config)
                 markers = []
                 for joint_state in path_conf:
@@ -173,12 +130,10 @@ if __name__ == "__main__":
 
                 print("Path executed. Dropping the object")
 
-                # Drop the object
                 env.open_gripper()
                 env.step_simulation(num_steps=5)
                 env.close_gripper()
 
-                # Retrace the path to original location
                 for joint_state in reversed(path_conf):
                     env.move_joints(joint_state, speed=0.1)
                 markers = None
@@ -186,10 +141,102 @@ if __name__ == "__main__":
 
         env.robot_go_home()
 
-        # Kiểm tra xem đối tượng có được chuyển đến thùng thứ hai hay không
         object_pos, _ = p.getBasePositionAndOrientation(object_id)
         if object_pos[0] >= -0.8 and object_pos[0] <= -0.2 and\
             object_pos[1] >= -0.3 and object_pos[1] <= 0.3 and\
             object_pos[2] <= 0.2:
             passed += 1
         env.reset_objects()
+def draw():
+    print("Starting draw function")
+    # Initialize line IDs
+    line_ids = [None, None, None]
+    current_object_id = None
+    current_obstacle_id = None
+    
+    def get_distance(a, b):
+        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2 + (a[2] - b[2])**2)
+    
+    while True:
+        try:
+            # Ensure there are objects and obstacles in the environment
+            if len(env._objects_body_ids) == 0 or len(env.obstacles) == 0:
+                print("No objects or obstacles found, waiting...")
+                time.sleep(0.1)
+                continue
+            
+            # Get current object and obstacle IDs
+            object_id = env._objects_body_ids[0]
+            obstacles_id = env.obstacles[0]
+            
+            # Check if the object or obstacle has been reset
+            if object_id != current_object_id or obstacles_id != current_obstacle_id:
+                # Reset line IDs when a new object or obstacle is detected
+                line_ids = [None, None, None]
+                current_object_id = object_id
+                current_obstacle_id = obstacles_id
+                print(f"Detected object or obstacles change. Updated object_id: {object_id}, obstacle_id: {obstacles_id}")
+            
+            # Verify that the object and obstacle still exist
+            try:
+                p.getBodyInfo(object_id)
+                p.getBodyInfo(obstacles_id)
+            except p.error as e:
+                print(f"Body ID error: {e}")
+                time.sleep(0.1)
+                continue
+            
+            # Get link positions
+            getlink1 = p.getLinkState(object_id, 0)[0]
+            getlink2 = p.getLinkState(object_id, 1)[0]
+            midpoint = np.add(getlink1, getlink2) / 2
+            
+            # Find the closest points between the object and obstacle
+            closest_points = p.getClosestPoints(obstacles_id, object_id, 100)
+            if not closest_points:
+                print("No closest points found")
+                a = getlink1  # Assign a default value to avoid errors
+            else:
+                a = closest_points[0][5]
+                
+            # Calculate the distance and print it
+            distance = get_distance(midpoint, a)
+            print(f"Distance between midpoint and closest point: {distance}")
+            
+            # Define lines to be drawn
+            lines_to_draw = [
+                (getlink1, a, [1, 0, 0]),    # Red line
+                (getlink2, a, [1, 0, 0]),    # Green line
+                (midpoint, a, [0, 1, 0])     # Green line
+            ]
+            
+            # Draw or update debug lines
+            for i, (start, end, color) in enumerate(lines_to_draw):
+                if line_ids[i] is None:
+                    # Create a new debug line if it doesn't exist
+                    line_ids[i] = p.addUserDebugLine(start, end, lineColorRGB=color, lineWidth=2)
+                else:
+                    # Update the existing debug line
+                    p.addUserDebugLine(start, end, lineColorRGB=color, lineWidth=2, replaceItemUniqueId=line_ids[i])
+            
+        except IndexError as e:
+            print(f"IndexError: {e}. Possible object or obstacle indices out of range. Retrying...")
+            # Reset line IDs to reinitialize lines in the next iteration
+            line_ids = [None, None, None]
+            current_object_id = None
+            current_obstacle_id = None
+        except Exception as e:
+            print(f"Exception in draw: {e}")
+        
+        time.sleep(0.1)
+if __name__ == "__main__":
+    random.seed(5)
+    object_shapes = [
+        "assets/objects/rod.urdf",
+    ]
+    env = sim_update.PyBulletSim(object_shapes = object_shapes)
+    thread1 = threading.Thread(target=run)
+    thread2 = threading.Thread(target=draw)
+    thread1.start()
+    thread2.start()
+    

@@ -25,18 +25,6 @@ def visualize_path(q_1, q_2, env, color=[0, 1, 0], tree='start'):
     p.addUserDebugLine(point_1, point_2, debug_color, 1.0)
 
 def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, max_connection_distance=0.15):
-    """
-    Thuật toán Bidirectional RRT.
-    
-    :param env: Môi trường mô phỏng (đối tượng PyBulletSim).
-    :param q_start: Cấu hình khớp nối ban đầu.
-    :param q_goal: Cấu hình khớp nối mục tiêu.
-    :param MAX_ITERS: Số lượng vòng lặp tối đa.
-    :param delta_q: Kích thước bước đi.
-    :param steer_goal_p: Xác suất để mẫu hóa hướng tới mục tiêu.
-    :param max_connection_distance: Khoảng cách tối đa để kết nối hai cây.
-    :return: Đường đi nếu tìm thấy, ngược lại là None.
-    """
     # Khởi tạo hai cây
     tree_start = [Node(q_start)]
     tree_goal = [Node(q_goal)]
@@ -86,13 +74,6 @@ def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, ma
     return None
 
 def semi_random_sample(steer_goal_p, steer_target):
-    """
-    Mẫu hóa một cấu hình ngẫu nhiên với định hướng tương ứng.
-    
-    :param steer_goal_p: Xác suất để mẫu hóa hướng tới mục tiêu.
-    :param steer_target: Mục tiêu hướng mẫu hóa (q_goal hoặc q_start tùy vào cây đang mở rộng).
-    :return: Cấu hình mẫu hóa.
-    """
     prob = random.random()
     if prob < steer_goal_p:
         q_rand = steer_target
@@ -309,16 +290,6 @@ def is_path_collision_free(env, q_start, q_end, step_size=0.01, distance=0.15):
     return True
 
 def connect_trees(tree_start, tree_goal, env, max_connection_distance):
-    """
-    Kết nối hai cây RRT nếu có bất kỳ cặp nút nào trong hai cây có khoảng cách nhỏ hơn ngưỡng cho phép 
-    và đường đi giữa chúng không gặp va chạm, sử dụng KD-Tree để tối ưu hóa.
-
-    :param tree_start: Danh sách các Node trong cây start.
-    :param tree_goal: Danh sách các Node trong cây goal.
-    :param env: Đối tượng môi trường PyBulletSim.
-    :param max_connection_distance: Khoảng cách tối đa để kết nối hai nút.
-    :return: Đường đi kết hợp nếu kết nối thành công, ngược lại None.
-    """
     # Tạo KD-Tree cho tree_goal
     tree_goal_positions = [node.joint_positions for node in tree_goal]
     kd_tree_goal = cKDTree(tree_goal_positions)
