@@ -15,7 +15,7 @@ import os
 
 
 class AlgorithmComparison:
-    def __init__(self, num_trials=50):
+    def __init__(self, num_trials=5):
         self.num_trials = num_trials
         self.object_shapes = ["assets/objects/rod.urdf"]
         self.env = sim_update.PyBulletSim(object_shapes=self.object_shapes)
@@ -28,8 +28,8 @@ class AlgorithmComparison:
 
     def run_comparison(self):
         # Tạo thư mục để lưu quỹ đạo
-        if not os.path.exists('trajectories1'):
-            os.makedirs('trajectories1')
+        if not os.path.exists('trajectories5'):
+            os.makedirs('trajectories5')
 
         algorithms = {
             'RRT': (run_rrt, lambda env, start, goal, iters, delta, p: rrt(start, goal, iters, delta, p, env)),
@@ -65,7 +65,7 @@ class AlgorithmComparison:
                         self.env,
                         self.env.robot_home_joint_config,
                         self.env.robot_goal_joint_config,
-                        500,  # MAX_ITERS
+                        1000,  # MAX_ITERS
                         0.1,    # delta_q
                         0.5     # steer_goal_p
                     )
@@ -104,7 +104,7 @@ class AlgorithmComparison:
 
     def plot_results(self):
         # Create figure with subplots
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+        fig, ((ax1, ax2),(ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 12))
 
         algorithms = list(self.results.keys())
         colors = ['b', 'g', 'r', 'c']  # Màu cho mỗi thuật toán
@@ -160,7 +160,7 @@ class AlgorithmComparison:
         ax4.grid(True)
 
         plt.tight_layout()
-        plt.savefig('algorithm_comparison.png', dpi=300, bbox_inches='tight')
+        plt.savefig('algorithm_comparison1.png', dpi=300, bbox_inches='tight')
         plt.show()
 
     def print_statistics(self):
@@ -183,7 +183,7 @@ class AlgorithmComparison:
 
 def main():
     random.seed(42)  # For reproducibility
-    comparison = AlgorithmComparison(num_trials=50)
+    comparison = AlgorithmComparison(num_trials=100)
     comparison.run_comparison()
     comparison.print_statistics()
     comparison.plot_results()

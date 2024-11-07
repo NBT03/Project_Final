@@ -199,12 +199,13 @@ def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, ma
                     if tree_identifier == 'start':
                         path = extract_path(current_tree, other_tree, new_node, 
                                          next(node for node in other_tree 
-                                             if node.joint_positions == closest_other))
+                                             if node.joint_positions == closest_other),
+                                         env)
                     else:
                         path = extract_path(other_tree, current_tree, 
                                          next(node for node in other_tree 
                                              if node.joint_positions == closest_other),
-                                         new_node)
+                                         new_node, env)
                     return path
 
     return None
@@ -223,7 +224,7 @@ def try_connect_nodes(q1, q2, env, step_size):
         visualize_path(q1, q_interp, env, color=[0, 0, 1])  # Màu xanh dương cho đường kết nối
     return True
 
-def extract_path(tree_start, tree_goal, node_start, node_goal):
+def extract_path(tree_start, tree_goal, node_start, node_goal,env):
     """Trích xuất đường đi từ hai cây"""
     path_start = []
     current = node_start
@@ -240,7 +241,7 @@ def extract_path(tree_start, tree_goal, node_start, node_goal):
 
     # Làm mịn đường đi
     complete_path = path_start + path_goal
-    return complete_path
+    return smooth_path(complete_path, env)
 def smooth_path(path, env, max_tries=50):
     """Làm mịn đường đi bằng cách loại bỏ các điểm thừa"""
     if len(path) <= 2:
