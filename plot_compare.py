@@ -11,6 +11,7 @@ from bi_rrt import bidirectional_rrt, run_bidirectional_rrt
 from bi_rrt_apf import bidirectional_rrt as bi_rrt_apf, run_bidirectional_rrt as run_bi_rrt_apf
 import time
 from main_rrt import get_grasp_position_angle as get_gr
+import os
 
 
 class AlgorithmComparison:
@@ -26,12 +27,20 @@ class AlgorithmComparison:
         }
 
     def run_comparison(self):
+        # Tạo thư mục để lưu quỹ đạo
+        if not os.path.exists('trajectories1'):
+            os.makedirs('trajectories1')
+
         algorithms = {
-            'RRT': (run_rrt, rrt),
-            'RRT-APF': (run_rrt_apf, rrt_apf),
-            'Bi-RRT': (run_bidirectional_rrt, bidirectional_rrt),
-            'Bi-RRT-APF': (run_bi_rrt_apf, bi_rrt_apf)
+            'RRT': (run_rrt, lambda env, start, goal, iters, delta, p: rrt(start, goal, iters, delta, p, env)),
+            'RRT-APF': (run_rrt_apf, lambda env, start, goal, iters, delta, p: rrt_apf(start, goal, iters, delta, p, env)),
+            'Bi-RRT': (run_bidirectional_rrt, lambda env, start, goal, iters, delta, p: bidirectional_rrt(env, start, goal, iters, delta, p)),
+            'Bi-RRT-APF': (run_bi_rrt_apf, lambda env, start, goal, iters, delta, p: bi_rrt_apf(env, start, goal, iters, delta, p))
         }
+
+        # Thêm success_indicators vào results
+        for algo in self.results:
+            self.results[algo]['success_indicators'] = np.zeros(self.num_trials)
 
         for algo_name, (run_func, algo_func) in algorithms.items():
             print(f"\nTesting {algo_name}...")
@@ -56,7 +65,7 @@ class AlgorithmComparison:
                         self.env,
                         self.env.robot_home_joint_config,
                         self.env.robot_goal_joint_config,
-                        10000,  # MAX_ITERS
+                        500,  # MAX_ITERS
                         0.1,    # delta_q
                         0.5     # steer_goal_p
                     )
@@ -66,10 +75,14 @@ class AlgorithmComparison:
                     
                     # Record results
                     if path_conf is not None:
+                        # Lưu quỹ đạo
+                        self.save_trajectory(path_conf, algo_name, trial)
+                        
                         path_length = self.calculate_path_length(path_conf)
                         self.results[algo_name]['path_lengths'].append(path_length)
                         self.results[algo_name]['execution_times'].append(execution_time)
                         self.results[algo_name]['success_rate'] += 1
+                        self.results[algo_name]['success_indicators'][trial] = 1
 
         # Convert success rates to percentages
         for algo in self.results:
@@ -81,34 +94,73 @@ class AlgorithmComparison:
             length += np.linalg.norm(np.array(path[i]) - np.array(path[i-1]))
         return length
 
+    def save_trajectory(self, path_conf, algo_name, trial_num):
+        """Lưu quỹ đạo vào file"""
+        if path_conf is not None:
+            filename = f"trajectories/{algo_name}_trial_{trial_num}.npy"
+            np.save(filename, np.array(path_conf))
+            return True
+        return False
+
     def plot_results(self):
         # Create figure with subplots
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
 
-        # Success Rate Comparison
         algorithms = list(self.results.keys())
-        success_rates = [self.results[algo]['success_rate'] for algo in algorithms]
-        ax1.bar(algorithms, success_rates)
-        ax1.set_title('Success Rate Comparison')
+        colors = ['b', 'g', 'r', 'c']  # Màu cho mỗi thuật toán
+
+        # 1. Success Rate over trials
+        for i, algo in enumerate(algorithms):
+            # Tính tỷ lệ thành công tích lũy
+            cumulative_success = np.cumsum(self.results[algo]['success_indicators']) / \
+                               np.arange(1, self.num_trials + 1)
+            ax1.plot(range(1, self.num_trials + 1), cumulative_success * 100, 
+                    label=algo, color=colors[i])
+        ax1.set_title('Success Rate over Trials')
+        ax1.set_xlabel('Number of Trials')
         ax1.set_ylabel('Success Rate (%)')
-        ax1.tick_params(axis='x', rotation=45)
+        ax1.legend()
+        ax1.grid(True)
 
-        # Path Length Comparison (Box Plot)
-        path_lengths = [self.results[algo]['path_lengths'] for algo in algorithms]
-        ax2.boxplot(path_lengths, labels=algorithms)
-        ax2.set_title('Path Length Distribution')
+        # 2. Path Length over successful trials
+        for i, algo in enumerate(algorithms):
+            lengths = self.results[algo]['path_lengths']
+            if lengths:
+                trials = range(1, len(lengths) + 1)
+                ax2.plot(trials, lengths, label=algo, color=colors[i])
+        ax2.set_title('Path Length over Successful Trials')
+        ax2.set_xlabel('Successful Trial Number')
         ax2.set_ylabel('Path Length')
-        ax2.tick_params(axis='x', rotation=45)
+        ax2.legend()
+        ax2.grid(True)
 
-        # Execution Time Comparison (Box Plot)
-        exec_times = [self.results[algo]['execution_times'] for algo in algorithms]
-        ax3.boxplot(exec_times, labels=algorithms)
-        ax3.set_title('Execution Time Distribution')
+        # 3. Execution Time over trials
+        for i, algo in enumerate(algorithms):
+            times = self.results[algo]['execution_times']
+            if times:
+                trials = range(1, len(times) + 1)
+                ax3.plot(trials, times, label=algo, color=colors[i])
+        ax3.set_title('Execution Time over Trials')
+        ax3.set_xlabel('Trial Number')
         ax3.set_ylabel('Time (seconds)')
-        ax3.tick_params(axis='x', rotation=45)
+        ax3.legend()
+        ax3.grid(True)
+
+        # 4. Cumulative Average Path Length
+        for i, algo in enumerate(algorithms):
+            lengths = self.results[algo]['path_lengths']
+            if lengths:
+                cumulative_avg = np.cumsum(lengths) / np.arange(1, len(lengths) + 1)
+                ax4.plot(range(1, len(lengths) + 1), cumulative_avg, 
+                        label=algo, color=colors[i])
+        ax4.set_title('Cumulative Average Path Length')
+        ax4.set_xlabel('Number of Successful Trials')
+        ax4.set_ylabel('Average Path Length')
+        ax4.legend()
+        ax4.grid(True)
 
         plt.tight_layout()
-        plt.savefig('algorithm_comparison.png')
+        plt.savefig('algorithm_comparison.png', dpi=300, bbox_inches='tight')
         plt.show()
 
     def print_statistics(self):

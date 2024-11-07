@@ -1,64 +1,68 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
-# Danh sách độ dài đường đi từ 50 lần chạy RRT
-path_lengths_rrt = [
-    2.4370745852919575, 2.775159931152171, 2.5849287806326866, 2.6052964814844723, 
-    2.4806456019446546, 2.9824473455232954, 2.220849117954327, 3.1, 
-    3.2, 2.2615216002074217, 2.6734550375558572, 2.4906602413625873, 
-    2.473059071302827, 2.551192130988211, 2.9834483552148114, 3.0570831696998786, 
-    2.5419583127092817, 2.6776207759007735, 2.5387772883618664, 2.842080025411023, 
-    3.0, 2.397758178266901, 2.844958886772344, 2.6335881020224976, 2.48032601523159, 
-    2.4410790802712263, 2.635547154361325, 2.490337134873711, 2.695728605662445, 
-    3, 2.706884373429142, 2.3706946552045594, 2.334602567383097, 
-    2.526934879555029, 2.753477127611332, 2.3998053374753248, 3.1240171407113655, 
-    2.666664749830589, 2.27455550579796, 2.8124396562713585, 2.6526876729063487, 
-    2.3803127258860193, 2.9469143644862856, 2.7639958962945834, 2.630409671746574, 
-    2.403684087651729, 2.4367172529597054, 2.5728992944344085, 2.6947597166487443, 
-    2.62832466018463
-]
+def plot_path_comparison(rrt_lengths, rrt_apf_lengths, birrt_lengths, birrt_apf_lengths):
+    # Xử lý dữ liệu
+    algorithms = ['RRT', 'RRT-APF', 'Bi-RRT', 'Bi-RRT-APF']
+    all_lengths = [rrt_lengths, rrt_apf_lengths, birrt_lengths, birrt_apf_lengths]
+    
+    # Tính toán các thông số cho mỗi thuật toán
+    stats = []
+    for lengths in all_lengths:
+        # Lọc bỏ None values
+        valid_lengths = [l for l in lengths if l is not None]
+        if valid_lengths:
+            stats.append({
+                'mean': np.mean(valid_lengths),
+                'std': np.std(valid_lengths),
+                'success_rate': len(valid_lengths) / len(lengths) * 100,
+                'min': np.min(valid_lengths),
+                'max': np.max(valid_lengths)
+            })
+        else:
+            stats.append({
+                'mean': 0,
+                'std': 0,
+                'success_rate': 0,
+                'min': 0,
+                'max': 0
+            })
 
-# Danh sách độ dài đường đi từ 50 lần chạy BiRRT
-path_lengths_birrt = [
-    2.7352843878181154, 2.848477417055857, 2.3402325065492025, 2.7342988281915552, 
-    2.741407948062021, 2.422378909730347, 2.4233197214029043, 2.423728720779899, 
-    2.2085494680783615, 2.934048680500639, 2.924896062341858, 2.422317523846601, 
-    2.640951943145148, 2.527337318947231, 2.430533129570481, 2.8398789789867522, 
-    2.6191947137507436, 3.040762592606977, 3.045485712931873, 2.316036960057001,
-    2.538798085282736, 3.047977491510544, 2.8861283046841515, 2.4391971593468207, 
-    2.337216983821252, 2.5429593704233993, 2.7464665615987376, 2.438841722531854, 
-    4.613883064394005, 2.8323230149926304, 3.339142124766127, 3.132371095085221, 
-    2.5418499614002243, 2.3304409191667483, 2.4252942354433973, 2.6356509613265198,
-    2.746866254487176, 2.6314821886508564, 2.924961048144404, 3.0125922878346776,
-    3.0499016449339846, 2.8289341773103995, 2.6734843250481686, 3.3471751203848803, 
-    3.723438640513619, 2.2960223336309085, 3.039531798585115 , 2.7352843878181154, 2.3402325065492025, 2.538798085282736
-]
+    # Tạo figure với 2 subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
-# Xác minh rằng cả hai danh sách có đúng 50 phần tử
-assert len(path_lengths_rrt) == 50, "path_lengths_rrt phải có 50 phần tử."
-assert len(path_lengths_birrt) == 50, "path_lengths_birrt phải có 50 phần tử."
+    # 1. Box plot cho độ dài đường đi
+    bp_data = [[l for l in lengths if l is not None] for lengths in all_lengths]
+    ax1.boxplot(bp_data, labels=algorithms)
+    ax1.set_title('Độ dài đường đi')
+    ax1.set_ylabel('Độ dài')
+    ax1.grid(True)
 
-# Tạo dãy số thử nghiệm từ 1 đến 50
-trials = range(1, 51)
+    # 2. Bar plot cho tỷ lệ thành công
+    success_rates = [stat['success_rate'] for stat in stats]
+    ax2.bar(algorithms, success_rates)
+    ax2.set_title('Tỷ lệ tìm được đường đi')
+    ax2.set_ylabel('Tỷ lệ thành công (%)')
+    ax2.grid(True)
 
-plt.figure(figsize=(14, 7))
+    # In thông số chi tiết
+    print("\nThống kê chi tiết:")
+    for alg, stat in zip(algorithms, stats):
+        print(f"\n{alg}:")
+        print(f"Độ dài trung bình: {stat['mean']:.2f}")
+        print(f"Độ lệch chuẩn: {stat['std']:.2f}")
+        print(f"Tỷ lệ thành công: {stat['success_rate']:.1f}%")
+        print(f"Độ dài min: {stat['min']:.2f}")
+        print(f"Độ dài max: {stat['max']:.2f}")
 
-# Vẽ đường cho RRT
-plt.plot(trials, path_lengths_rrt, marker='o', linestyle='-', color='b', label='Độ dài đường đi RRT')
+    plt.tight_layout()
+    plt.show()
 
-# Vẽ đường cho BiRRT
-plt.plot(trials, path_lengths_birrt, marker='s', linestyle='--', color='r', label='Độ dài đường đi BiRRT')
+# Sử dụng hàm
+# Thay thế các giá trị này bằng kết quả thực tế từ các lần chạy của bạn
+rrt_lengths = [...]  # Kết quả từ main_rrt.py
+rrt_apf_lengths = [...]  # Kết quả từ rrt_apf.py
+birrt_lengths = [...]  # Kết quả từ bi_rrt.py
+birrt_apf_lengths = [...]  # Kết quả từ bi_rrt_apf.py
 
-# Thêm tiêu đề và nhãn trục
-plt.xlabel('Thử nghiệm', fontsize=14)
-plt.ylabel('Độ dài đường đi (radians)', fontsize=14)
-plt.title('So sánh Độ dài Quỹ đạo Đường Đi sau 50 Lần Chạy RRT và BiRRT', fontsize=16)
-
-# Thêm huy hiệu và lưới
-plt.legend(fontsize=12)
-plt.grid(True)
-
-# Điều chỉnh bố cục
-plt.tight_layout()
-
-# Hiển thị đồ thị
-plt.show()
+plot_path_comparison(rrt_lengths, rrt_apf_lengths, birrt_lengths, birrt_apf_lengths)

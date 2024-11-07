@@ -14,10 +14,14 @@ delta_q = 0.1
 
 def visualize_path(q_1, q_2, env, color=[0, 1, 0]):
     env.set_joint_positions(q_1)
-    point_1 = p.getLinkState(env.robot_body_id, 6)[0]
+    point_1 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_1[2] -= 0.15
+    
     env.set_joint_positions(q_2)
-    point_2 = p.getLinkState(env.robot_body_id, 6)[0]
-    p.addUserDebugLine(point_1, point_2, color, 1.0)
+    point_2 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_2[2] -= 0.15
+    
+    p.addUserDebugLine(point_1, point_2, color, 1.5)
 
 
 def rrt(q_init, q_goal, MAX_ITERS, delta_q, steer_goal_p, env, distance=0.12):
@@ -126,7 +130,7 @@ def run():
                 for joint_state in path_conf:
                     env.move_joints(joint_state, speed=0.05)
                     link_state = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)
-                    markers.append(sim_update.SphereMarker(link_state[0], radius=0.02))
+                    # markers.append(sim_update.SphereMarker(link_state[0], radius=0.02))
 
                 print("Path executed. Dropping the object")
 

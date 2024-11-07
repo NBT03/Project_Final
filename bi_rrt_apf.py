@@ -240,8 +240,7 @@ def extract_path(tree_start, tree_goal, node_start, node_goal):
 
     # Làm mịn đường đi
     complete_path = path_start + path_goal
-    return smooth_path(complete_path, env)
-
+    return complete_path
 def smooth_path(path, env, max_tries=50):
     """Làm mịn đường đi bằng cách loại bỏ các điểm thừa"""
     if len(path) <= 2:

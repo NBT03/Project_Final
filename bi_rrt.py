@@ -15,14 +15,18 @@ class Node:
     def __init__(self, joint_positions, parent=None):
         self.joint_positions = joint_positions
         self.parent = parent
-
-def visualize_path(q_1, q_2, env, color=[0, 1, 0], tree='start'):
+def visualize_path(q_1, q_2, env, color=[0, 1, 0],tree='start'):
     env.set_joint_positions(q_1)
-    point_1 = p.getLinkState(env.robot_body_id, 6)[0]
+    point_1 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_1[2] -= 0.15
+    
     env.set_joint_positions(q_2)
-    point_2 = p.getLinkState(env.robot_body_id, 6)[0]
+    point_2 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_2[2] -= 0.15
     debug_color = color if tree == 'start' else [1, 0, 1]  # Màu sắc khác nhau cho hai cây
-    p.addUserDebugLine(point_1, point_2, debug_color, 1.0)
+
+    p.addUserDebugLine(point_1, point_2, debug_color, 1.5)
+
 
 def bidirectional_rrt(env, q_start, q_goal, MAX_ITERS, delta_q, steer_goal_p, max_connection_distance=0.3):
     # Khởi tạo hai cây
@@ -108,8 +112,7 @@ def extract_path(tree_start, tree_goal, node_start, node_goal):
 
     # Làm mịn đường đi
     complete_path = path_start + path_goal
-    return smooth_path(complete_path, env)
-
+    return complete_path
 def smooth_path(path, env, max_tries=50):
     """Làm mịn đường đi bằng cách loại bỏ các điểm thừa"""
     if len(path) <= 2:
@@ -208,7 +211,7 @@ def run_bidirectional_rrt():
                 for joint_state in path_conf:
                     env.move_joints(joint_state, speed=0.01)
                     link_state = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)
-                    markers.append(sim_update.SphereMarker(link_state[0], radius=0.01))
+                    # markers.append(sim_update.SphereMarker(link_state[0], radius=0.01))
                 print("Path executed. Dropping the object")
                 env.open_gripper()
                 env.step_simulation(num_steps=5)
@@ -220,8 +223,8 @@ def run_bidirectional_rrt():
                     for joint_state in path_conf_reversed:
                         env.move_joints(joint_state, speed=0.01)
                         link_state = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)
-                        markers.append(sim_update.SphereMarker(link_state[0], radius=0.01))
-                markers = None
+                #         markers.append(sim_update.SphereMarker(link_state[0], radius=0.01))
+                # markers = None
             p.removeAllUserDebugItems()
 
         env.robot_go_home()

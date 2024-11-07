@@ -7,7 +7,7 @@ class PyBulletSim:
     def __init__(self, use_random_objects=False, object_shapes=None, gui=True):
         self._workspace1_bounds = np.array([
             [-0.16, -0.17],  # 3x2 rows: x,y,z cols: min,max
-            [-0.55, -0.57],
+            [-0.55, -0.55],
             [0.83, 0.84]
         ])
         if gui:
@@ -22,10 +22,10 @@ class PyBulletSim:
         self.robot_body_id = p.loadURDF(
             "assets/ur5/doosan_origin.urdf", [0, 0, 0.83], p.getQuaternionFromEuler([0, 0, 0]))
 
-        self._base_id = p.loadURDF(
-            "assets/ur5/base_doosan.urdf", [0.75,0.3,0], p.getQuaternionFromEuler([0,0,np.pi]),useFixedBase=True)
-        self._cabin_id = p.loadURDF(
-            "assets/ur5/Cabin.urdf",[-0.75,-1,0], p.getQuaternionFromEuler([np.pi/2, 0, np.pi/2]),useFixedBase=True)
+        # self._base_id = p.loadURDF(
+        #     "assets/ur5/base_doosan.urdf", [0.75,0.3,0], p.getQuaternionFromEuler([0,0,np.pi]),useFixedBase=True)
+        # self._cabin_id = p.loadURDF(
+        #     "assets/ur5/Cabin.urdf",[-0.75,-1,0], p.getQuaternionFromEuler([np.pi/2, 0, np.pi/2]),useFixedBase=True)
         self._gripper_body_id = None
         self.robot_end_effector_link_index = 6
         self._robot_tool_offset = [0, 0, 0]
@@ -261,9 +261,8 @@ class PyBulletSim:
                 )
     def reset_objects(self):
         for object_body_id in self._objects_body_ids:
-            random_position = np.random.random_sample((3))*(self._workspace1_bounds[:, 1]-(
-                    self._workspace1_bounds[:, 0]+0.1))+self._workspace1_bounds[:, 0]+0.1
-            random_orientation = np.random.random_sample((3))*2*np.pi-np.pi
+            random_position = [-0.163733, -0.46024903,0.92727434]
+            random_orientation = [-0.41378682, -0.47447575, 0.07145692]
             p.resetBasePositionAndOrientation(
                 object_body_id, random_position, p.getQuaternionFromEuler(random_orientation))
         self.step_simulation(2e2)
@@ -304,7 +303,7 @@ class PyBulletSim:
                     self.robot_body_id, obstacle_id, distance, linkIndexA=link_idx)
                 if closest_points:
                     # Collision detected
-                    print(f"Collision detected between robot link '{link_name}' (index {link_idx}) and obstacle ID {obstacle_id}")
+                    # print(f"Collision detected between robot link '{link_name}' (index {link_idx}) and obstacle ID {obstacle_id}")
                     collision_detected = True
                     break  # Exit early on first detected collision
             if collision_detected:

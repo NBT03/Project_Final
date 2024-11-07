@@ -14,10 +14,14 @@ delta_q = 0.05
 
 def visualize_path(q_1, q_2, env, color=[0, 1, 0]):
     env.set_joint_positions(q_1)
-    point_1 = p.getLinkState(env.robot_body_id, 6)[0]
+    point_1 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_1[2] -= 0.15
+    
     env.set_joint_positions(q_2)
-    point_2 = p.getLinkState(env.robot_body_id, 6)[0]
-    p.addUserDebugLine(point_1, point_2, color, 1.0)
+    point_2 = list(p.getLinkState(env.robot_body_id, 6)[0])
+    point_2[2] -= 0.15
+    
+    p.addUserDebugLine(point_1, point_2, color, 1.5)
 
 
 def rrt(q_init, q_goal, MAX_ITERS, delta_q, steer_goal_p, env, distance=0.12):
@@ -118,15 +122,6 @@ def modified_steer(q_nearest, q_rand, delta_q, q_goal, env):
     env.set_joint_positions(q_new)
     end_pos = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)[0]
     
-    # Vẽ hướng di chuyển
-    p.addUserDebugLine(
-        start_pos,
-        end_pos,
-        [0, 1, 0],  # Màu xanh lá cho hướng di chuyển
-        lineWidth=2,
-        lifeTime=0.1
-    )
-    
     return q_new.tolist()
 
 
@@ -178,15 +173,6 @@ def repulsive_force(q_current, env, k_rep=1000.0, d0=1):
                         J = calculate_jacobian(env, q_current)
                         joint_force = np.dot(J.T, transformed_force[:3])
                         rep_force += joint_force
-                        
-                        # Trực quan hóa lực đẩy
-                        p.addUserDebugLine(
-                            point,
-                            obstacle_pos,
-                            [1, 0, 0],  # Màu đỏ cho lực đẩy
-                            lineWidth=2,
-                            lifeTime=0.1
-                        )
     
     return rep_force
 
@@ -225,30 +211,6 @@ def transform_force(force, transform):
     # Kết hợp lực và moment
     transformed_force = np.concatenate([force[:3], moment])
     return transformed_force
-
-def visualize_forces(env, object_pos, obstacle_pos, force):
-    """Trực quan hóa các lực tác động"""
-    # Vẽ vector lực
-    scale = 0.1  # Tỷ lệ để vẽ vector lực
-    force_end = object_pos + scale * force[:3]
-    
-    # Vẽ lực đẩy (màu đỏ)
-    p.addUserDebugLine(
-        object_pos,
-        force_end,
-        [1, 0, 0],
-        lineWidth=2,
-        lifeTime=0.1
-    )
-    
-    # Vẽ đường nối giữa vật thể và chướng ngại vật (màu xám)
-    p.addUserDebugLine(
-        object_pos,
-        obstacle_pos,
-        [0.5, 0.5, 0.5],
-        lineWidth=1,
-        lifeTime=0.1
-    )
 
 def calculate_jacobian(env, q):
     """Tính ma trận Jacobian"""
@@ -295,8 +257,8 @@ def run():
                 markers = []
                 for joint_state in path_conf:
                     env.move_joints(joint_state, speed=0.05)
-                    link_state = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)
-                    markers.append(sim_update.SphereMarker(link_state[0], radius=0.02))
+                    # link_state = p.getLinkState(env.robot_body_id, env.robot_end_effector_link_index)
+                    # markers.append(sim_update.SphereMarker(link_state[0], radius=0.02))
 
                 print("Path executed. Dropping the object")
 
@@ -305,8 +267,8 @@ def run():
                 env.close_gripper()
 
                 for joint_state in reversed(path_conf):
-                    env.move_joints(joint_state, speed=0.1)
-                markers = None
+                    env.move_joints(joint_state, speed=0.05)
+            #     markers = None
             p.removeAllUserDebugItems()
 
         env.robot_go_home()
